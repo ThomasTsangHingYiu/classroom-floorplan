@@ -107,7 +107,35 @@ class Timer {
         
         clearInterval(this.intervalId);
         this.updateDisplay();
-        this.syncToFirebase();
+        
+        // Clear the student name when reset is pressed
+        this.clearStudentName();
+        
+        // Sync the reset state to Firebase
+        this.syncToFirebase(true); // Pass true to indicate this is a reset
+    }
+
+    clearStudentName() {
+        // Find and clear the student name input for this table
+        const input = document.querySelector(`input[data-table="${this.id}"]`);
+        if (input) {
+            input.value = '';
+            // Trigger the input event to sync the cleared name
+            const event = new Event('input', { bubbles: true });
+            input.dispatchEvent(event);
+        }
+    }
+
+    clearStudentNameSilently() {
+        // Clear the student name without triggering sync (used when receiving reset from Firebase)
+        const input = document.querySelector(`input[data-table="${this.id}"]`);
+        if (input) {
+            input.value = '';
+            // Also clear from the classroom's local storage
+            if (window.classroom) {
+                window.classroom.setStudentName(this.id, '');
+            }
+        }
     }
 
     setupFirebaseSync() {
@@ -130,6 +158,11 @@ class Timer {
         this.startTime = data.startTime || null;
         this.pausedTime = data.pausedTime || 0;
         
+        // If this is a reset action from another user, clear the student name too
+        if (data.isReset) {
+            this.clearStudentNameSilently(); // Clear without triggering sync loop
+        }
+        
         // Update local timer state
         if (this.isRunning && !wasRunning) {
             this.startLocalTimer();
@@ -140,7 +173,7 @@ class Timer {
         this.updateDisplay();
     }
 
-    syncToFirebase() {
+    syncToFirebase(isReset = false) {
         if (this.firebaseRef) {
             this.isLocalUpdate = true;
             this.firebaseRef.set({
@@ -149,6 +182,7 @@ class Timer {
                 remaining: this.remaining,
                 startTime: this.startTime,
                 pausedTime: this.pausedTime,
+                isReset: isReset,
                 lastUpdate: Date.now()
             }).catch(error => {
                 console.warn('Firebase sync error:', error);
